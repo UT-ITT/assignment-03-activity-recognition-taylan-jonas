@@ -9,6 +9,7 @@ This Python script captures accelerometer and gyroscope data from a DIPPID devic
 Ensure you have Python installed along with the following dependencies:
 * `pandas`
 * `DIPPID`
+* `sklearn`
 
 You can install Pandas via pip if you haven't already:
 ```bash
