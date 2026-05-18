@@ -11,13 +11,14 @@ from activity_recognizer import ActivityRecognizer
 from DIPPID import SensorUDP
 
 PORT = 5700
-WINDOW_WIDTH = 800
-WINDOW_HEIGHT = 600
+WINDOW_WIDTH = 1200
+WINDOW_HEIGHT = 1000
 
 class FitnessTrainer(pyglet.window.Window):
     def __init__(self):
         super().__init__(width=WINDOW_WIDTH, height=WINDOW_HEIGHT, caption="ITT Fitness Trainer", resizable=True)
         
+        # Load data and train models in the background to avoid freezing the UI
         print("Loading data and training models... This might take a moment.")
         self.activity_recognizer = ActivityRecognizer()
         
@@ -28,7 +29,7 @@ class FitnessTrainer(pyglet.window.Window):
         
         threading.Thread(target=self.sensor_reader, daemon=True).start()
         
-        # --- Game Logic Variables ---
+        # Game Logic Variables
         self.state = "MENU"
         self.target_activity = None
         self.current_set = 1
@@ -38,21 +39,21 @@ class FitnessTrainer(pyglet.window.Window):
         self.break_duration = 30.0 
         self.break_time_remaining = 0.0
         
-        # --- UI Setup ---
+        # UI Setup
         self.batch = pyglet.graphics.Batch()
         
         self.background = shapes.Rectangle(0, 0, self.width, self.height, color=(30, 30, 46), batch=self.batch)
         self.header_bg = shapes.Rectangle(0, self.height - 80, self.width, 80, color=(24, 24, 37), batch=self.batch)
         
-        # Made the box taller to allow for more text spacing
-        self.status_box = shapes.Rectangle(0, 0, 600, 500, color=(49, 50, 68), batch=self.batch) 
+        self.status_box = shapes.Rectangle(0, 0, 1000, 800, color=(49, 50, 68), batch=self.batch)
         
         self.title = pyglet.text.Label("AI Fitness Trainer", font_name='Arial', font_size=28,
                                        anchor_x="center", anchor_y="center", color=(205, 214, 244, 255), batch=self.batch)
         
-        self.instruction_label = pyglet.text.Label("", font_name='Arial', font_size=18,
-                                                   anchor_x="center", anchor_y="center", multiline=True, width=500,
-                                                   color=(186, 194, 222, 255), batch=self.batch)
+        self.instruction_label = pyglet.text.Label(
+            "", font_name='Arial', font_size=18, anchor_x="center", anchor_y="center",
+            multiline=True, width=500, align="center",
+            color=(186, 194, 222, 255), batch=self.batch)
         
         self.activity_label = pyglet.text.Label("Loading...", font_name='Arial', font_size=32,
                                                 anchor_x="center", anchor_y="center", color=(166, 227, 161, 255), batch=self.batch)
@@ -63,7 +64,7 @@ class FitnessTrainer(pyglet.window.Window):
         self.bar_bg = shapes.Rectangle(0, 0, 400, 20, color=(24, 24, 37), batch=self.batch)
         self.bar_fill = shapes.Rectangle(0, 0, 0, 20, color=(166, 227, 161), batch=self.batch)
         
-        # --- Animation & Image Setup ---
+        # Animation & Image Setup
         self.animations = {
             "jumpingjack": self.load_animation("jumpingjack"),
             "lifting": self.load_animation("lifting"),
@@ -71,7 +72,7 @@ class FitnessTrainer(pyglet.window.Window):
             "running": self.load_animation("running")
         }
         
-        # Changed to ./img/
+        # Load victory image separately since it's not an animation
         try:
             vic_img = pyglet.image.load("./img/victory.png")
             vic_img.anchor_x = vic_img.width // 2
@@ -91,12 +92,10 @@ class FitnessTrainer(pyglet.window.Window):
         pyglet.clock.schedule_interval(self.update, 1/10)
         self.set_menu_state()
 
-    # --- Window & Input Handling ---
-    
+    # Window & Input Handling
     def on_resize(self, width, height):
-        """Calculates beautifully spaced coordinates so nothing overlaps or clusters."""
         super().on_resize(width, height)
-        
+        # Update positions and sizes of all elements based on new window size
         self.background.width = width
         self.background.height = height
         self.header_bg.width = width
@@ -104,44 +103,46 @@ class FitnessTrainer(pyglet.window.Window):
         self.title.x = width // 2
         self.title.y = height - 40
         
-        self.status_box.x = width // 2 - 300
-        self.status_box.y = height // 2 - 250
+        self.status_box.x = width // 2 - 500
+        self.status_box.y = height // 2 - 400
         
-        # --- Increased Y-Spacing to prevent clutter ---
         self.sprite.x = width // 2
-        self.sprite.y = height // 2 + 100        # Moved images slightly higher
+        self.sprite.y = height // 2 + 100 
         
         self.bar_bg.x = width // 2 - 200
-        self.bar_bg.y = height // 2 - 10         # Progress bar directly below image
+        self.bar_bg.y = height // 2 - 10 
         self.bar_fill.x = width // 2 - 200
         self.bar_fill.y = height // 2 - 10
         
         self.activity_label.x = width // 2
-        self.activity_label.y = height // 2 - 70 # Big text lower down
-        
+        self.activity_label.y = height // 2 - 120 
         self.instruction_label.x = width // 2
-        self.instruction_label.y = height // 2 - 140 # Instructions nicely spaced below big text
+        self.instruction_label.y = height // 2 - 170
         
         self.models_label.x = width // 2
-        self.models_label.y = height // 2 - 220  # Sensor status tucked at the very bottom
+        self.models_label.y = height // 2 - 220 
 
     def on_key_press(self, symbol, modifiers):
+        # Toggle fullscreen with F11
         if symbol == key.F11:
             self.set_fullscreen(not self.fullscreen)
-            
+        
+        # Menu navigation and workout control
         if self.state == "MENU":
             if symbol == key._1: self.start_workout("jumpingjack")
             elif symbol == key._2: self.start_workout("lifting")
             elif symbol == key._3: self.start_workout("rowing")
             elif symbol == key._4: self.start_workout("running")
-            
+         
+        # Allow returning to menu from break or finished states   
         elif self.state == "FINISHED":
             if symbol == key.SPACE:
                 self.set_menu_state()
+                
 
-    # --- Game Logic States ---
-
+    # Game Logic States 
     def set_menu_state(self):
+        self.models_label.text = ""
         self.state = "MENU"
         self.sprite.visible = False
         self.bar_bg.visible = False
@@ -155,7 +156,8 @@ class FitnessTrainer(pyglet.window.Window):
             "Press [3] - Rowing\n"
             "Press [4] - Running"
         )
-        
+    
+    # Workout Control 
     def start_workout(self, activity):
         self.target_activity = activity
         self.current_set = 1
@@ -165,11 +167,9 @@ class FitnessTrainer(pyglet.window.Window):
         self.bar_bg.visible = True
         self.bar_fill.visible = True
 
-    # --- Background Data Processing ---
-
+    # Background Data Processing 
     def load_animation(self, name):
         try:
-            # Changed to ./img/
             img1 = pyglet.image.load(f"./img/{name}_1.png")
             img2 = pyglet.image.load(f"./img/{name}_2.png")
             img1.anchor_x, img1.anchor_y = img1.width // 2, img1.height // 2
@@ -183,6 +183,7 @@ class FitnessTrainer(pyglet.window.Window):
             acc = self.sensor.get_value("accelerometer")
             gyro = self.sensor.get_value("gyroscope")
             
+            # Only append if we have valid data to prevent NaNs in our dataset
             if acc and gyro:
                 sample = {
                     "timestamp": time.time(),
@@ -190,6 +191,8 @@ class FitnessTrainer(pyglet.window.Window):
                     "gyro_x": gyro.get("x", 0.0), "gyro_y": gyro.get("y", 0.0), "gyro_z": gyro.get("z", 0.0)
                 }
                 now = sample["timestamp"]
+                
+                # Append new sample, remove old samples beyond 5 seconds
                 with self.data_lock:
                     self.data.append(sample) 
                     while self.data and now - self.data[0]["timestamp"] > 5:
@@ -202,10 +205,12 @@ class FitnessTrainer(pyglet.window.Window):
                 return None
             records = list(self.data)
 
+        # Convert to DataFrame and preprocess
         df = pd.DataFrame(records)
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
         df = df.set_index("timestamp").sort_index()
 
+        # Resample to 10ms intervals, interpolate missing values, and drop any remaining NaNs
         try:
             df_resampled = df.resample("10ms").mean().interpolate(method="linear").dropna()
             if len(df_resampled) > 10:
@@ -217,11 +222,14 @@ class FitnessTrainer(pyglet.window.Window):
     def update_visuals(self, target):
         target_lower = str(target).lower()
         matched_anim = None
+        
+        # Check for keywords in the target activity to determine which animation to show
         for key in self.animations:
             if key in target_lower: 
                 matched_anim = self.animations[key]
                 break
                 
+        # If we found a matching animation, show it.
         if matched_anim:
             if self.sprite.image != matched_anim:
                 self.sprite.image = matched_anim
@@ -229,37 +237,47 @@ class FitnessTrainer(pyglet.window.Window):
         else:
             self.sprite.visible = False 
 
-    # --- Main Loop (Game Logic + Predictions) ---
-
+    # Main Loop (Game Logic + Predictions)
     def update(self, dt):
         data = self.sample_data()
         rf_pred = "waiting"
         
+        # Only attempt prediction if we have enough data to avoid errors
         if data is not None:
             try:
                 svm_pred, rf_pred = self.activity_recognizer.get_predictions(data)
-                self.models_label.text = f"Sensor currently detects: {rf_pred.upper()}"
+                if self.state != "MENU":
+                    self.models_label.text = f"Sensor currently detects: {rf_pred.upper()}"
             except Exception:
                 pass
 
+        # If in the menu, we don't need to update visuals or check predictions
         if self.state == "MENU":
             return 
             
+        # Exercise State Logic
         elif self.state == "EXERCISE":
+            
+            # Update instruction and visuals based on the target activity
             self.instruction_label.text = f"Target: {self.target_activity.upper()} | Set {self.current_set} of {self.max_sets}"
             self.update_visuals(self.target_activity) 
             
+            # Check if the predicted activity matches the target activity
             if self.target_activity in str(rf_pred).lower():
+                # If the user is performing the correct movement, count down the active time
                 self.active_time_remaining -= dt
                 self.activity_label.text = f"{self.active_time_remaining:.1f}s remaining!"
                 self.activity_label.color = (166, 227, 161, 255) 
             else:
+                # If the user is not performing the correct movement, reset the active time and prompt them
                 self.activity_label.text = "Perform correct movement!"
                 self.activity_label.color = (243, 139, 168, 255) 
-                
+            
+            # Update the progress bar based on the remaining active time
             progress_ratio = max(0, 1.0 - (self.active_time_remaining / self.time_per_set))
             self.bar_fill.width = 400 * progress_ratio
             
+            #  If the active time has run out, either move to the next set or go to break/finish state
             if self.active_time_remaining <= 0:
                 if self.current_set >= self.max_sets:
                     self.state = "FINISHED"
@@ -268,6 +286,7 @@ class FitnessTrainer(pyglet.window.Window):
                     self.break_time_remaining = self.break_duration
                     self.state = "BREAK"
                     
+        # Break State Logic
         elif self.state == "BREAK":
             self.break_time_remaining -= dt
             self.bar_bg.visible = False
@@ -283,7 +302,8 @@ class FitnessTrainer(pyglet.window.Window):
                 self.bar_bg.visible = True
                 self.bar_fill.visible = True
                 self.state = "EXERCISE"
-                
+        
+        # Finished State Logic    
         elif self.state == "FINISHED":
             self.bar_bg.visible = False
             self.bar_fill.visible = False
